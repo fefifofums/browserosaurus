@@ -25,7 +25,7 @@ import {
 } from '../../renderers/prefs/state/actions.js'
 import { gotKeyLayoutMap } from '../../renderers/shared/state/actions.js'
 
-type PrefsTab = 'about' | 'apps' | 'general'
+type PrefsTab = 'about' | 'apps' | 'general' | 'rules'
 
 type Data = {
   version: string

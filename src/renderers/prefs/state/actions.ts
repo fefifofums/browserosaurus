@@ -21,6 +21,18 @@ const updatedHotCode = prefs<{ appName: AppName; value: string }>(
   'hot-code/updated',
 )
 
+const addedRule = prefs<{
+  appName: AppName
+  pattern: string
+}>('rule/added')
+
+const removedRule = prefs<{ pattern: string }>('rule/removed')
+
+const reorderedRule = prefs<{
+  sourcePattern: string
+  destinationPattern: string
+}>('rule/reordered')
+
 const reorderedApp = prefs<{ sourceName: AppName; destinationName: AppName }>(
   'app/reordered',
 )
@@ -29,6 +41,7 @@ const clickedHomepageButton = prefs('homepage-button/clicked')
 const clickedOpenIssueButton = prefs('open-issue-button/clicked')
 
 export {
+  addedRule,
   clickedHomepageButton,
   clickedOpenIssueButton,
   clickedRescanApps,
@@ -37,7 +50,9 @@ export {
   clickedUpdateButton,
   clickedUpdateRestartButton,
   confirmedReset,
+  removedRule,
   reorderedApp,
+  reorderedRule,
   startedPrefs,
   updatedHotCode,
 }

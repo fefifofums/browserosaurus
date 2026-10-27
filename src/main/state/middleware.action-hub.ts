@@ -29,6 +29,7 @@ import copyUrlToClipboard from '../utils/copy-url-to-clipboard.js'
 import { getAppIcons } from '../utils/get-app-icons.js'
 import { getInstalledAppNames } from '../utils/get-installed-app-names.js'
 import { initUpdateChecker } from '../utils/init-update-checker.js'
+import { findMatchingRule } from '../utils/match-rule.js'
 import { openApp } from '../utils/open-app.js'
 // import { removeWindowsFromMemory } from '../utils/remove-windows-from-memory'
 import {
@@ -175,7 +176,25 @@ export const actionHubMiddleware =
 
     // Open URL
     else if (openedUrl.match(action)) {
-      showPickerWindow()
+      const { url } = nextState.data
+
+      const matchedRule = findMatchingRule(nextState.storage.rules, url)
+
+      const isMatchedAppInstalled =
+        matchedRule !== undefined &&
+        nextState.storage.apps.some(
+          (storedApp) =>
+            storedApp.name === matchedRule.appName && storedApp.isInstalled,
+        )
+
+      // A rule matched and its app is installed: open directly, no prompt.
+      if (matchedRule !== undefined && isMatchedAppInstalled) {
+        openApp(matchedRule.appName, url, false, false)
+      }
+      // No rule matched, or the matched app is no longer installed: prompt.
+      else {
+        showPickerWindow()
+      }
     }
 
     // Tray: restore picker
