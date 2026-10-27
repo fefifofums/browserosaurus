@@ -9,7 +9,12 @@ jobs:
   trivy:
     permissions:
       security-events: write
+      pull-requests: write
     runs-on: ubuntu-24.04
+    env:
+      # Hidden marker that identifies the report comment on a pull request,
+      # so it is updated in place rather than posted anew on every push.
+      COMMENT_MARKER: <!-- trivy-report -->
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -39,3 +44,242 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy.sarif
+
+      # Pull requests additionally get the findings posted as a comment on the
+      # conversation, so the results are visible without leaving the PR.
+      # The gate on head.repo.full_name skips pull requests opened from forks,
+      # whose comments cannot be created with the workflow token.
+      - name: Generate Trivy JSON report
+        if:
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          format: json
+          output: trivy.json
+          exit-code: '0'
+
+      - name: Render Trivy report for PR comment
+        if:
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          RUN_URL:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{
+            github.run_id }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs')
+
+          const marker = process.env.COMMENT_MARKER
+          if (!marker) {
+            console.error('COMMENT_MARKER is not set')
+            process.exit(1)
+          }
+          const runUrl = process.env.RUN_URL || ''
+          const commitSha = process.env.COMMIT_SHA || ''
+          const rowLimit = 50
+
+          const severityOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN']
+          const severityEmoji = {
+            CRITICAL: '🔴',
+            HIGH: '🟠',
+            MEDIUM: '🟡',
+            LOW: '⚪',
+            UNKNOWN: '⚫',
+          }
+
+          const report = JSON.parse(fs.readFileSync('trivy.json', 'utf8'))
+
+          const vulnerabilities = []
+          const secrets = []
+          for (const result of report.Results || []) {
+            for (const vulnerability of result.Vulnerabilities || []) {
+              vulnerabilities.push(vulnerability)
+            }
+            for (const secret of result.Secrets || []) {
+              secrets.push({ target: result.Target, ...secret })
+            }
+          }
+
+          const severityRank = severityOrder.reduce((ranks, severity, index) => {
+            ranks[severity] = index
+            return ranks
+          }, {})
+
+          const rankOf = (vulnerability) =>
+            severityRank[(vulnerability.Severity || '').toUpperCase()] ??
+            severityOrder.length
+
+          vulnerabilities.sort(
+            (a, b) =>
+              rankOf(a) - rankOf(b) ||
+              String(a.VulnerabilityID || '').localeCompare(
+                String(b.VulnerabilityID || ''),
+              ),
+          )
+
+          const count = (severity) =>
+            vulnerabilities.filter(
+              (vulnerability) =>
+                (vulnerability.Severity || '').toUpperCase() === severity,
+            ).length
+
+          const escapeCell = (value) =>
+            String(value ?? '')
+              .replace(/\|/g, '\\|')
+              .replace(/\r+/g, '')
+              .replace(/\n+/g, ' ')
+
+          const truncate = (text, maxLength) =>
+            text.length > maxLength ? text.slice(0, maxLength - 1) + '…' : text
+
+          const summaryParts = severityOrder
+            .filter((severity) => count(severity) > 0)
+            .map(
+              (severity) =>
+                severityEmoji[severity] +
+                ' ' +
+                count(severity) +
+                ' ' +
+                severity.toLowerCase(),
+            )
+          if (secrets.length > 0) {
+            summaryParts.push(
+              '✨ ' + secrets.length + ' secret' + (secrets.length === 1 ? '' : 's'),
+            )
+          }
+
+          const total = vulnerabilities.length
+          const body = []
+          body.push(marker)
+
+          if (total === 0 && secrets.length === 0) {
+            body.push(
+              '**✅ Trivy report: no vulnerabilities or secrets detected**',
+            )
+          } else {
+            let heading =
+              '**🔒 Trivy report: ' + total + ' finding' + (total === 1 ? '' : 's') + '**'
+            if (summaryParts.length > 0) {
+              heading += ' — ' + summaryParts.join(' · ')
+            }
+            body.push(heading)
+          }
+
+          if (total > 0) {
+            body.push('')
+            body.push('| Severity | ID | Package | Installed | Fixed in | Issue |')
+            body.push('| --- | --- | --- | --- | --- | --- |')
+            for (const vulnerability of vulnerabilities.slice(0, rowLimit)) {
+              const id = vulnerability.VulnerabilityID || 'unknown'
+              const idCell = vulnerability.PrimaryURL
+                ? '[' + id + '](' + vulnerability.PrimaryURL + ')'
+                : id
+              let fixedCell = vulnerability.FixedVersion || '—'
+              if ((vulnerability.Status || '') === 'will_not_fix') {
+                fixedCell = 'no fix planned'
+              }
+              body.push(
+                '| ' +
+                  [
+                    (severityEmoji[
+                      (vulnerability.Severity || '').toUpperCase()
+                    ] || severityEmoji.UNKNOWN) +
+                      ' ' +
+                      (vulnerability.Severity || 'UNKNOWN'),
+                    idCell,
+                    escapeCell(vulnerability.PkgName),
+                    escapeCell(vulnerability.InstalledVersion),
+                    escapeCell(fixedCell),
+                    escapeCell(truncate(vulnerability.Title || '', 80)),
+                  ].join(' | ') +
+                  ' |',
+              )
+            }
+            if (total > rowLimit) {
+              body.push('')
+              body.push(
+                '…and ' +
+                  (total - rowLimit) +
+                  ' more — see the full table in the job log and the Security tab',
+              )
+            }
+          }
+
+          if (secrets.length > 0) {
+            body.push('')
+            body.push(
+              '**✨ ' +
+                secrets.length +
+                ' secret finding' +
+                (secrets.length === 1 ? '' : 's') +
+                '**',
+            )
+            body.push('')
+            body.push('| Severity | Rule | Location |')
+            body.push('| --- | --- | --- |')
+            for (const secret of secrets.slice(0, rowLimit)) {
+              body.push(
+                '| ' +
+                  [
+                    (severityEmoji[(secret.Severity || '').toUpperCase()] ||
+                      severityEmoji.UNKNOWN) +
+                      ' ' +
+                      (secret.Severity || 'UNKNOWN'),
+                    escapeCell(
+                      (secret.RuleID || 'unknown') +
+                        (secret.Title ? ' — ' + secret.Title : ''),
+                    ),
+                    escapeCell(
+                      (secret.target || '') + ':' + (secret.StartLine ?? ''),
+                    ),
+                  ].join(' | ') +
+                  ' |',
+              )
+            }
+          }
+
+          const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+          const shortSha = commitSha.slice(0, 7)
+          body.push('')
+          body.push(
+            '*Updated: ' +
+              now +
+              (shortSha ? ' · ' + shortSha : '') +
+              ' · full table: ' +
+              (runUrl ? '[job log](' + runUrl + ')' : 'job log') +
+              ' · tracked alerts: Security → code scanning*',
+          )
+
+          fs.writeFileSync('trivy-report.md', body.join('\n') + '\n')
+          console.log(
+            'trivy-report.md written: ' +
+              total +
+              ' vulnerabilities, ' +
+              secrets.length +
+              ' secrets',
+          )
+          EOF
+
+      - name: Post Trivy report as PR comment
+        if:
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate --jq '.[] | select(.body | startswith(env.COMMENT_MARKER)) | .id')
+          comment_id=$(printf '%s\n' "$ids" | head -n 1)
+          if [ -n "$comment_id" ]; then
+            echo "Updating existing Trivy report comment: $comment_id"
+            gh api --method PATCH --silent "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$(cat trivy-report.md)"
+          else
+            echo "Creating Trivy report comment on PR #$PR_NUMBER"
+            gh api --method POST --silent "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$(cat trivy-report.md)"
+          fi
