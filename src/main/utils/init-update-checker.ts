@@ -1,6 +1,6 @@
 import { app, autoUpdater } from 'electron'
 
-import package_ from '../../../package.json'
+import package_ from '../../../package.json' with { type: 'json' }
 import { logger } from '../../shared/utils/logger.js'
 import {
   availableUpdate,
