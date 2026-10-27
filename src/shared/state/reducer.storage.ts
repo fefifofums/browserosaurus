@@ -17,6 +17,7 @@ import {
   removedRule,
   reorderedApp,
   reorderedRule,
+  updatedDefaultApp,
   updatedHotCode,
 } from '../../renderers/prefs/state/actions.js'
 
@@ -31,6 +32,7 @@ type Storage = {
     hotCode: string | null
     isInstalled: boolean
   }[]
+  defaultAppName: AppName | null
   rules: Rule[]
   supportMessage: number
   isSetup: boolean
@@ -39,6 +41,7 @@ type Storage = {
 
 const defaultStorage: Storage = {
   apps: [],
+  defaultAppName: 'Firefox',
   height: 200,
   isSetup: false,
   rules: [],
@@ -103,6 +106,10 @@ const storage = createReducer<Storage>(defaultStorage, (builder) =>
         appName: action.payload.appName,
         pattern: action.payload.pattern,
       })
+    })
+
+    .addCase(updatedDefaultApp, (state, action) => {
+      state.defaultAppName = action.payload
     })
 
     .addCase(removedRule, (state, action) => {

@@ -3,6 +3,7 @@
 import { app, autoUpdater, shell } from 'electron'
 import deepEqual from 'fast-deep-equal'
 
+import type { AppName } from '../../config/apps.js'
 import { B_URL, ISSUES_URL } from '../../config/constants.js'
 import {
   clickedApp,
@@ -177,23 +178,32 @@ export const actionHubMiddleware =
     // Open URL
     else if (openedUrl.match(action)) {
       const { url } = nextState.data
+      const { apps, defaultAppName, rules } = nextState.storage
 
-      const matchedRule = findMatchingRule(nextState.storage.rules, url)
-
-      const isMatchedAppInstalled =
-        matchedRule !== undefined &&
-        nextState.storage.apps.some(
-          (storedApp) =>
-            storedApp.name === matchedRule.appName && storedApp.isInstalled,
+      const isInstalled = (appName: AppName): boolean =>
+        apps.some(
+          (storedApp) => storedApp.name === appName && storedApp.isInstalled,
         )
 
-      // A rule matched and its app is installed: open directly, no prompt.
-      if (matchedRule !== undefined && isMatchedAppInstalled) {
-        openApp(matchedRule.appName, url, false, false)
-      }
-      // No rule matched, or the matched app is no longer installed: prompt.
-      else {
+      const matchedRule = findMatchingRule(rules, url)
+
+      // Rule match wins, then the fallback app, otherwise prompt.
+      const ruleAppName =
+        matchedRule !== undefined && isInstalled(matchedRule.appName)
+          ? matchedRule.appName
+          : undefined
+
+      const fallbackAppName =
+        defaultAppName !== null && isInstalled(defaultAppName)
+          ? defaultAppName
+          : undefined
+
+      const appName = ruleAppName ?? fallbackAppName
+
+      if (appName === undefined) {
         showPickerWindow()
+      } else {
+        openApp(appName, url, false, false)
       }
     }
 

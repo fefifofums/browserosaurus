@@ -2,8 +2,23 @@ import {
   addedRule,
   removedRule,
   reorderedRule,
+  updatedDefaultApp,
 } from '../../renderers/prefs/state/actions.js'
 import { defaultStorage, storage } from './reducer.storage.js'
+
+test('updatedDefaultApp sets the fallback app', () => {
+  const nextState = storage(defaultStorage, updatedDefaultApp('Safari'))
+
+  expect(nextState.defaultAppName).toBe('Safari')
+})
+
+test('updatedDefaultApp clears the fallback app', () => {
+  const withDefaultApp = storage(defaultStorage, updatedDefaultApp('Safari'))
+
+  const nextState = storage(withDefaultApp, updatedDefaultApp(null))
+
+  expect(nextState.defaultAppName).toBeNull()
+})
 
 test('addedRule appends the rule to storage', () => {
   const nextState = storage(

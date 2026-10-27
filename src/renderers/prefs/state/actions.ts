@@ -21,6 +21,8 @@ const updatedHotCode = prefs<{ appName: AppName; value: string }>(
   'hot-code/updated',
 )
 
+const updatedDefaultApp = prefs<AppName | null>('default-app/updated')
+
 const addedRule = prefs<{
   appName: AppName
   pattern: string
@@ -54,5 +56,6 @@ export {
   reorderedApp,
   reorderedRule,
   startedPrefs,
+  updatedDefaultApp,
   updatedHotCode,
 }

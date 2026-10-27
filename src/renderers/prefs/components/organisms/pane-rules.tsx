@@ -21,6 +21,7 @@ import { useDispatch } from 'react-redux'
 import type { AppName } from '../../../../config/apps.js'
 import { compileRulePattern } from '../../../../shared/utils/compile-rule-pattern.js'
 import Button from '../../../shared/components/atoms/button.js'
+import Select from '../../../shared/components/atoms/select.js'
 import { Spinner } from '../../../shared/components/atoms/spinner.js'
 import {
   useDeepEqualSelector,
@@ -170,20 +171,9 @@ export function RulesPane(): JSX.Element {
 
       <div className="flex grow flex-col overflow-hidden p-2">
         <div className="mb-4 flex gap-2">
-          <select
+          <Select
             aria-label="App"
-            className={clsx(
-              'min-w-0 grow',
-              'focus:bg-white/70 focus:shadow-xl focus:outline-none focus:ring-1 focus:ring-gray-500 dark:focus:bg-black',
-              'bg-white shadow-sm dark:bg-[#56555C]',
-              'text-black dark:text-white',
-              'border',
-              'border-b-[#C1BFBF] dark:border-b-[#56555C]',
-              'border-l-[#D4D2D2] dark:border-l-[#56555C]',
-              'border-r-[#D4D2D2] dark:border-r-[#56555C]',
-              'border-t-[#DAD8D8] dark:border-t-[#6E6D73]',
-              'rounded px-2 py-1',
-            )}
+            className="min-w-0 grow"
             onChange={(event) => {
               setAppName(event.target.value as AppName)
               setError('')
@@ -196,7 +186,7 @@ export function RulesPane(): JSX.Element {
                 {name}
               </option>
             ))}
-          </select>
+          </Select>
           <input
             aria-label="Regular expression"
             className={clsx(
@@ -266,8 +256,7 @@ export function RulesPane(): JSX.Element {
           <code className="font-mono">
             {String.raw`^https?://([^/]+\.)?example\.com`}
           </code>
-          . If the app of a matching rule is not installed, the picker is shown
-          as normal.
+          . URLs that match no rule open in the fallback app, see General.
         </p>
       </div>
     </Pane>
