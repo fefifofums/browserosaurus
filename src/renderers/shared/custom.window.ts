@@ -4,7 +4,7 @@ import type { UnknownAction } from 'redux'
 import type { Channel } from '../../shared/state/channels.js'
 
 declare global {
-  // eslint-disable-next-line vars-on-top, no-var
+  // eslint-disable-next-line vars-on-top
   var electron: {
     send: (channel: Channel, action: UnknownAction) => void
     receive: (

@@ -12,10 +12,19 @@ import {
   clickedMaybeLater,
 } from '../../renderers/picker/state/actions.js'
 import {
+  addedRule,
   confirmedReset,
+  removedRule,
   reorderedApp,
+  reorderedRule,
+  updatedDefaultApp,
   updatedHotCode,
 } from '../../renderers/prefs/state/actions.js'
+
+type Rule = {
+  appName: AppName
+  pattern: string
+}
 
 type Storage = {
   apps: {
@@ -23,6 +32,8 @@ type Storage = {
     hotCode: string | null
     isInstalled: boolean
   }[]
+  defaultAppName: AppName | null
+  rules: Rule[]
   supportMessage: number
   isSetup: boolean
   height: number
@@ -30,8 +41,10 @@ type Storage = {
 
 const defaultStorage: Storage = {
   apps: [],
+  defaultAppName: 'Firefox',
   height: 200,
   isSetup: false,
+  rules: [],
   supportMessage: 0,
 }
 
@@ -88,6 +101,40 @@ const storage = createReducer<Storage>(defaultStorage, (builder) =>
       state.apps[appIndex].hotCode = hotCode
     })
 
+    .addCase(addedRule, (state, action) => {
+      state.rules.push({
+        appName: action.payload.appName,
+        pattern: action.payload.pattern,
+      })
+    })
+
+    .addCase(updatedDefaultApp, (state, action) => {
+      state.defaultAppName = action.payload
+    })
+
+    .addCase(removedRule, (state, action) => {
+      const ruleIndex = state.rules.findIndex(
+        (rule) => rule.pattern === action.payload.pattern,
+      )
+
+      if (ruleIndex !== -1) {
+        state.rules.splice(ruleIndex, 1)
+      }
+    })
+
+    .addCase(reorderedRule, (state, action) => {
+      const sourceIndex = state.rules.findIndex(
+        (rule) => rule.pattern === action.payload.sourcePattern,
+      )
+
+      const destinationIndex = state.rules.findIndex(
+        (rule) => rule.pattern === action.payload.destinationPattern,
+      )
+
+      const [removed] = state.rules.splice(sourceIndex, 1)
+      state.rules.splice(destinationIndex, 0, removed)
+    })
+
     .addCase(clickedDonate, (state) => {
       state.supportMessage = -1
     })
@@ -114,4 +161,4 @@ const storage = createReducer<Storage>(defaultStorage, (builder) =>
     }),
 )
 
-export { defaultStorage, Storage, storage }
+export { defaultStorage, Rule, Storage, storage }

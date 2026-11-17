@@ -22,6 +22,7 @@ module.exports = {
     },
     fontFamily: {
       sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont',
+      mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     },
   },
   plugins: [

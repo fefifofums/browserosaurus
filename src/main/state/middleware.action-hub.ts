@@ -3,6 +3,7 @@
 import { app, autoUpdater, shell } from 'electron'
 import deepEqual from 'fast-deep-equal'
 
+import type { AppName } from '../../config/apps.js'
 import { B_URL, ISSUES_URL } from '../../config/constants.js'
 import {
   clickedApp,
@@ -29,6 +30,7 @@ import copyUrlToClipboard from '../utils/copy-url-to-clipboard.js'
 import { getAppIcons } from '../utils/get-app-icons.js'
 import { getInstalledAppNames } from '../utils/get-installed-app-names.js'
 import { initUpdateChecker } from '../utils/init-update-checker.js'
+import { findMatchingRule } from '../utils/match-rule.js'
 import { openApp } from '../utils/open-app.js'
 // import { removeWindowsFromMemory } from '../utils/remove-windows-from-memory'
 import {
@@ -175,7 +177,34 @@ export const actionHubMiddleware =
 
     // Open URL
     else if (openedUrl.match(action)) {
-      showPickerWindow()
+      const { url } = nextState.data
+      const { apps, defaultAppName, rules } = nextState.storage
+
+      const isInstalled = (appName: AppName): boolean =>
+        apps.some(
+          (storedApp) => storedApp.name === appName && storedApp.isInstalled,
+        )
+
+      const matchedRule = findMatchingRule(rules, url)
+
+      // Rule match wins, then the fallback app, otherwise prompt.
+      const ruleAppName =
+        matchedRule !== undefined && isInstalled(matchedRule.appName)
+          ? matchedRule.appName
+          : undefined
+
+      const fallbackAppName =
+        defaultAppName !== null && isInstalled(defaultAppName)
+          ? defaultAppName
+          : undefined
+
+      const appName = ruleAppName ?? fallbackAppName
+
+      if (appName === undefined) {
+        showPickerWindow()
+      } else {
+        openApp(appName, url, false, false)
+      }
     }
 
     // Tray: restore picker
